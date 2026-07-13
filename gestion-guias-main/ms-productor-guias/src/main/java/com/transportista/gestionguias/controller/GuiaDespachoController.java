@@ -26,7 +26,7 @@ public class GuiaDespachoController {
     }
 
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
+    @ResponseStatus(HttpStatus.ACCEPTED)
     public GuiaResponse crearGuia(@Valid @RequestBody GuiaRequest request) {
         return service.crearGuia(request);
     }

@@ -1,10 +1,14 @@
 package com.transportista.gestionguias.dto;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 public class GuiaResponse {
 
     private Long id;
+    private UUID mensajeId;
+    private LocalDateTime fechaSolicitud;
     private String numeroGuia;
     private String transportista;
     private String cliente;
@@ -20,7 +24,17 @@ public class GuiaResponse {
     public GuiaResponse(Long id, String numeroGuia, String transportista, String cliente,
                         String direccionDestino, LocalDate fechaEmision,
                         String nombreArchivo, String s3Key, String estado) {
+        this(id, null, null, numeroGuia, transportista, cliente, direccionDestino,
+                fechaEmision, nombreArchivo, s3Key, estado);
+    }
+
+    public GuiaResponse(Long id, UUID mensajeId, LocalDateTime fechaSolicitud,
+                        String numeroGuia, String transportista, String cliente,
+                        String direccionDestino, LocalDate fechaEmision,
+                        String nombreArchivo, String s3Key, String estado) {
         this.id = id;
+        this.mensajeId = mensajeId;
+        this.fechaSolicitud = fechaSolicitud;
         this.numeroGuia = numeroGuia;
         this.transportista = transportista;
         this.cliente = cliente;
@@ -33,6 +47,14 @@ public class GuiaResponse {
 
     public Long getId() {
         return id;
+    }
+
+    public UUID getMensajeId() {
+        return mensajeId;
+    }
+
+    public LocalDateTime getFechaSolicitud() {
+        return fechaSolicitud;
     }
 
     public String getNumeroGuia() {

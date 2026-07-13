@@ -2,13 +2,16 @@ package com.transportista.gestionguias.service;
 
 import com.transportista.gestionguias.dto.GuiaRequest;
 import com.transportista.gestionguias.dto.GuiaResponse;
+import com.transportista.gestionguias.dto.GuiaDespachoMessage;
 import com.transportista.gestionguias.entity.GuiaDespacho;
 import com.transportista.gestionguias.exception.RecursoNoEncontradoException;
+import com.transportista.gestionguias.messaging.GuiaDespachoPublisher;
 import com.transportista.gestionguias.repository.GuiaDespachoRepository;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,15 +21,18 @@ public class GuiaDespachoServiceImpl implements GuiaDespachoService {
     private final GuiaDespachoRepository repository;
     private final ArchivoService archivoService;
     private final S3Service s3Service;
+    private final GuiaDespachoPublisher publisher;
 
     public GuiaDespachoServiceImpl(
             GuiaDespachoRepository repository,
             ArchivoService archivoService,
-            S3Service s3Service) {
+            S3Service s3Service,
+            GuiaDespachoPublisher publisher) {
 
         this.repository = repository;
         this.archivoService = archivoService;
         this.s3Service = s3Service;
+        this.publisher = publisher;
     }
 
     @Override
@@ -34,11 +40,16 @@ public class GuiaDespachoServiceImpl implements GuiaDespachoService {
 
         GuiaDespacho guia = new GuiaDespacho();
 
+        UUID mensajeId = UUID.randomUUID();
+        LocalDateTime fechaSolicitud = LocalDateTime.now();
+
         String numeroGuia = "GUIA-" + UUID.randomUUID()
                 .toString()
                 .substring(0, 8)
                 .toUpperCase();
 
+        guia.setMensajeId(mensajeId);
+        guia.setFechaSolicitud(fechaSolicitud);
         guia.setNumeroGuia(numeroGuia);
         guia.setTransportista(request.getTransportista());
         guia.setCliente(request.getCliente());
@@ -47,24 +58,26 @@ public class GuiaDespachoServiceImpl implements GuiaDespachoService {
         guia.setNombreArchivo(numeroGuia + ".pdf");
         guia.setRutaEfs("PENDIENTE");
         guia.setS3Key(null);
-        guia.setEstado("GENERADA");
+        guia.setEstado("ENCOLADA");
 
         repository.save(guia);
 
-        String rutaPdf = archivoService.generarPdf(guia);
-        guia.setRutaEfs(rutaPdf);
-
-        File archivoPdf = new File(rutaPdf);
-
-        String s3Key = s3Service.subirArchivo(
-                archivoPdf,
+        GuiaDespachoMessage mensaje = new GuiaDespachoMessage(
+                mensajeId,
+                guia.getNumeroGuia(),
                 guia.getTransportista(),
-                guia.getNombreArchivo());
+                guia.getCliente(),
+                guia.getDireccionDestino(),
+                guia.getFechaEmision(),
+                fechaSolicitud);
 
-        guia.setS3Key(s3Key);
-        guia.setEstado("SUBIDA_S3");
-
-        repository.save(guia);
+        try {
+            publisher.publicarGuia(mensaje);
+        } catch (RuntimeException ex) {
+            guia.setEstado("ERROR_PUBLICACION");
+            repository.save(guia);
+            throw ex;
+        }
 
         return convertir(guia);
     }
@@ -190,6 +203,8 @@ public class GuiaDespachoServiceImpl implements GuiaDespachoService {
 
         return new GuiaResponse(
                 guia.getId(),
+                guia.getMensajeId(),
+                guia.getFechaSolicitud(),
                 guia.getNumeroGuia(),
                 guia.getTransportista(),
                 guia.getCliente(),
