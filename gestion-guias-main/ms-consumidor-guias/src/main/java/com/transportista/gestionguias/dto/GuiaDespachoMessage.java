@@ -2,6 +2,7 @@ package com.transportista.gestionguias.dto;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 public class GuiaDespachoMessage {
@@ -88,5 +89,48 @@ public class GuiaDespachoMessage {
 
     public void setFechaSolicitud(LocalDateTime fechaSolicitud) {
         this.fechaSolicitud = fechaSolicitud;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        GuiaDespachoMessage that = (GuiaDespachoMessage) o;
+        return Objects.equals(mensajeId, that.mensajeId)
+                && Objects.equals(numeroGuia, that.numeroGuia)
+                && Objects.equals(transportista, that.transportista)
+                && Objects.equals(cliente, that.cliente)
+                && Objects.equals(direccionDestino, that.direccionDestino)
+                && Objects.equals(fechaEmision, that.fechaEmision)
+                && Objects.equals(fechaSolicitud, that.fechaSolicitud);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+                mensajeId,
+                numeroGuia,
+                transportista,
+                cliente,
+                direccionDestino,
+                fechaEmision,
+                fechaSolicitud);
+    }
+
+    @Override
+    public String toString() {
+        return "GuiaDespachoMessage{"
+                + "mensajeId=" + mensajeId
+                + ", numeroGuia='" + numeroGuia + '\''
+                + ", transportista='" + transportista + '\''
+                + ", cliente='" + cliente + '\''
+                + ", direccionDestino='" + direccionDestino + '\''
+                + ", fechaEmision=" + fechaEmision
+                + ", fechaSolicitud=" + fechaSolicitud
+                + '}';
     }
 }
