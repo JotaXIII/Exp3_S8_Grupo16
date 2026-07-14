@@ -2,9 +2,9 @@ FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
-COPY target/gestion-guias-0.0.1-SNAPSHOT.jar app.jar
+COPY --chown=10001:10001 target/gestion-guias-0.0.1-SNAPSHOT.jar app.jar
 
-RUN mkdir -p /app/efs
+USER 10001:10001
 
 EXPOSE 8080
 

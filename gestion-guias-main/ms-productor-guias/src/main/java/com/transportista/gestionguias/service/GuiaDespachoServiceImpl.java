@@ -1,15 +1,14 @@
 package com.transportista.gestionguias.service;
 
+import com.transportista.gestionguias.dto.GuiaDespachoMessage;
 import com.transportista.gestionguias.dto.GuiaRequest;
 import com.transportista.gestionguias.dto.GuiaResponse;
-import com.transportista.gestionguias.dto.GuiaDespachoMessage;
 import com.transportista.gestionguias.entity.GuiaDespacho;
 import com.transportista.gestionguias.exception.RecursoNoEncontradoException;
 import com.transportista.gestionguias.messaging.GuiaDespachoPublisher;
 import com.transportista.gestionguias.repository.GuiaDespachoRepository;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,30 +18,20 @@ import java.util.UUID;
 public class GuiaDespachoServiceImpl implements GuiaDespachoService {
 
     private final GuiaDespachoRepository repository;
-    private final ArchivoService archivoService;
-    private final S3Service s3Service;
     private final GuiaDespachoPublisher publisher;
 
     public GuiaDespachoServiceImpl(
             GuiaDespachoRepository repository,
-            ArchivoService archivoService,
-            S3Service s3Service,
             GuiaDespachoPublisher publisher) {
-
         this.repository = repository;
-        this.archivoService = archivoService;
-        this.s3Service = s3Service;
         this.publisher = publisher;
     }
 
     @Override
     public GuiaResponse crearGuia(GuiaRequest request) {
-
         GuiaDespacho guia = new GuiaDespacho();
-
         UUID mensajeId = UUID.randomUUID();
         LocalDateTime fechaSolicitud = LocalDateTime.now();
-
         String numeroGuia = "GUIA-" + UUID.randomUUID()
                 .toString()
                 .substring(0, 8)
@@ -55,11 +44,7 @@ public class GuiaDespachoServiceImpl implements GuiaDespachoService {
         guia.setCliente(request.getCliente());
         guia.setDireccionDestino(request.getDireccionDestino());
         guia.setFechaEmision(LocalDate.now());
-        guia.setNombreArchivo(numeroGuia + ".pdf");
-        guia.setRutaEfs("PENDIENTE");
-        guia.setS3Key(null);
         guia.setEstado("ENCOLADA");
-
         repository.save(guia);
 
         GuiaDespachoMessage mensaje = new GuiaDespachoMessage(
@@ -84,135 +69,47 @@ public class GuiaDespachoServiceImpl implements GuiaDespachoService {
 
     @Override
     public List<GuiaResponse> listarGuias() {
-        return repository.findAll()
-                .stream()
-                .map(this::convertir)
-                .toList();
+        return repository.findAll().stream().map(this::convertir).toList();
     }
 
     @Override
     public GuiaResponse obtenerGuia(Long id) {
-
-        GuiaDespacho guia = repository.findById(id)
-                .orElseThrow(() ->
-                        new RecursoNoEncontradoException(
-                                "No existe una guía con id " + id));
-
-        return convertir(guia);
+        return convertir(repository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "No existe una guia con id " + id)));
     }
 
     @Override
     public List<GuiaResponse> buscarPorTransportista(String transportista) {
         return repository.findByTransportistaIgnoreCase(transportista)
-                .stream()
-                .map(this::convertir)
-                .toList();
+                .stream().map(this::convertir).toList();
     }
 
     @Override
     public List<GuiaResponse> buscarPorFecha(LocalDate fecha) {
         return repository.findByFechaEmision(fecha)
-                .stream()
-                .map(this::convertir)
-                .toList();
+                .stream().map(this::convertir).toList();
     }
 
     @Override
-    public List<GuiaResponse> buscarHistorial(
-            String transportista,
-            LocalDate fecha) {
-
+    public List<GuiaResponse> buscarHistorial(String transportista, LocalDate fecha) {
         if (transportista != null && fecha != null) {
-            return repository
-                    .findByTransportistaIgnoreCaseAndFechaEmision(
-                            transportista,
-                            fecha)
-                    .stream()
-                    .map(this::convertir)
-                    .toList();
+            return repository.findByTransportistaIgnoreCaseAndFechaEmision(transportista, fecha)
+                    .stream().map(this::convertir).toList();
         }
-
         if (transportista != null) {
             return buscarPorTransportista(transportista);
         }
-
         if (fecha != null) {
             return buscarPorFecha(fecha);
         }
-
         return listarGuias();
     }
 
-    @Override
-    public GuiaResponse actualizarGuia(Long id, GuiaRequest request) {
-
-        GuiaDespacho guia = repository.findById(id)
-                .orElseThrow(() ->
-                        new RecursoNoEncontradoException(
-                                "No existe una guía con id " + id));
-
-        guia.setTransportista(request.getTransportista());
-        guia.setCliente(request.getCliente());
-        guia.setDireccionDestino(request.getDireccionDestino());
-        guia.setEstado("ACTUALIZADA");
-
-        repository.save(guia);
-
-        String rutaPdf = archivoService.generarPdf(guia);
-        guia.setRutaEfs(rutaPdf);
-
-        File archivoPdf = new File(rutaPdf);
-
-        s3Service.actualizarArchivo(
-                archivoPdf,
-                guia.getS3Key());
-
-        repository.save(guia);
-
-        return convertir(guia);
-    }
-
-    @Override
-    public void eliminarGuia(Long id) {
-
-        GuiaDespacho guia = repository.findById(id)
-                .orElseThrow(() ->
-                        new RecursoNoEncontradoException(
-                                "No existe una guía con id " + id));
-
-        if (guia.getS3Key() != null) {
-            s3Service.eliminarArchivo(guia.getS3Key());
-        }
-
-        repository.delete(guia);
-    }
-
-    @Override
-    public byte[] descargarGuia(Long id) {
-
-        GuiaDespacho guia = repository.findById(id)
-                .orElseThrow(() ->
-                        new RecursoNoEncontradoException(
-                                "No existe una guía con id " + id));
-
-        return s3Service.descargarArchivo(
-                guia.getS3Key());
-    }
-
     private GuiaResponse convertir(GuiaDespacho guia) {
-
         return new GuiaResponse(
-                guia.getId(),
-                guia.getMensajeId(),
-                guia.getFechaSolicitud(),
-                guia.getNumeroGuia(),
-                guia.getTransportista(),
-                guia.getCliente(),
-                guia.getDireccionDestino(),
-                guia.getFechaEmision(),
-                guia.getNombreArchivo(),
-                guia.getS3Key(),
-                guia.getEstado()
-        );
+                guia.getId(), guia.getMensajeId(), guia.getFechaSolicitud(),
+                guia.getNumeroGuia(), guia.getTransportista(), guia.getCliente(),
+                guia.getDireccionDestino(), guia.getFechaEmision(), guia.getEstado());
     }
 }

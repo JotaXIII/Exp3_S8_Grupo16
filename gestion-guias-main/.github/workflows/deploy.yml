@@ -1,4 +1,4 @@
-name: Deploy gestion-guias to EC2
+name: Build and deploy microservices
 
 on:
   push:
@@ -8,6 +8,22 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: productor
+            directory: ms-productor-guias
+            image: ms-productor-guias
+            port: 8080
+            ec2_host_secret: EC2_PRODUCTOR_HOST
+            ec2_key_secret: EC2_PRODUCTOR_SSH_KEY
+          - service: consumidor
+            directory: ms-consumidor-guias
+            image: ms-consumidor-guias
+            port: 8081
+            ec2_host_secret: EC2_CONSUMIDOR_HOST
+            ec2_key_secret: EC2_CONSUMIDOR_SSH_KEY
 
     steps:
       - name: Checkout repository
@@ -18,9 +34,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+          cache: maven
+          cache-dependency-path: ${{ matrix.directory }}/pom.xml
 
-      - name: Build application
-        run: mvn clean package -DskipTests
+      - name: Test and package ${{ matrix.service }}
+        working-directory: ${{ matrix.directory }}
+        run: bash ./mvnw clean package
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -28,34 +47,80 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build Docker image
-        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/gestion-guias:latest .
+      - name: Build image
+        working-directory: ${{ matrix.directory }}
+        run: docker build -t "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}" .
 
-      - name: Push Docker image
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/gestion-guias:latest
-
-      - name: Configure SSH key
+      - name: Push image
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
+          docker push "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}"
+          docker tag "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}" \
+            "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest"
+          docker push "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest"
+
+      - name: Configure SSH
+        env:
+          EC2_HOST: ${{ secrets[matrix.ec2_host_secret] }}
+          EC2_SSH_KEY: ${{ secrets[matrix.ec2_key_secret] }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key.pem
           chmod 600 ~/.ssh/ec2_key.pem
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
-      - name: Deploy on EC2
+      - name: Deploy producer on its EC2
+        if: matrix.service == 'productor'
+        env:
+          EC2_HOST: ${{ secrets[matrix.ec2_host_secret] }}
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem ec2-user@${{ secrets.EC2_HOST }} << 'EOF'
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/gestion-guias:latest
-
-            docker stop gestion-guias || true
-            docker rm gestion-guias || true
-
-            docker run -d \
-              --name gestion-guias \
-              -p 8080:8080 \
-              -e STORAGE_PATH=/app/efs \
-              -e AWS_S3_BUCKET=gestion-guias-grupo16 \
-              -e AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
-              -e AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
-              -e AWS_SESSION_TOKEN="${{ secrets.AWS_SESSION_TOKEN }}" \
-              -v /mnt/efs:/app/efs \
-              ${{ secrets.DOCKERHUB_USERNAME }}/gestion-guias:latest
+          ssh -i ~/.ssh/ec2_key.pem "ec2-user@$EC2_HOST" << EOF
+            echo '${{ secrets.DOCKERHUB_TOKEN }}' | docker login \
+              --username '${{ secrets.DOCKERHUB_USERNAME }}' --password-stdin
+            docker pull '${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}'
+            docker stop 'ms-${{ matrix.service }}-guias' || true
+            docker rm 'ms-${{ matrix.service }}-guias' || true
+            docker run -d --restart unless-stopped \
+              --name 'ms-${{ matrix.service }}-guias' \
+              -p '${{ matrix.port }}:${{ matrix.port }}' \
+              -e SERVER_PORT='${{ matrix.port }}' \
+              -e RABBITMQ_HOST='${{ secrets.RABBITMQ_HOST }}' \
+              -e RABBITMQ_PORT='${{ secrets.RABBITMQ_PORT }}' \
+              -e RABBITMQ_USERNAME='${{ secrets.RABBITMQ_USERNAME }}' \
+              -e RABBITMQ_PASSWORD='${{ secrets.RABBITMQ_PASSWORD }}' \
+              -e AZURE_B2C_JWK_SET_URI='${{ secrets.AZURE_B2C_JWK_SET_URI }}' \
+              -e AZURE_B2C_ISSUER_URI='${{ secrets.AZURE_B2C_ISSUER_URI }}' \
+              -e AZURE_B2C_AUDIENCE='${{ secrets.AZURE_B2C_AUDIENCE }}' \
+              '${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}'
           EOF
+
+      - name: Deploy consumer on its EC2
+        if: matrix.service == 'consumidor'
+        env:
+          EC2_HOST: ${{ secrets[matrix.ec2_host_secret] }}
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem "ec2-user@$EC2_HOST" << EOF
+            echo '${{ secrets.DOCKERHUB_TOKEN }}' | docker login \
+              --username '${{ secrets.DOCKERHUB_USERNAME }}' --password-stdin
+            docker pull '${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}'
+            docker stop 'ms-${{ matrix.service }}-guias' || true
+            docker rm 'ms-${{ matrix.service }}-guias' || true
+            docker run -d --restart unless-stopped \
+              --name 'ms-${{ matrix.service }}-guias' \
+              -p '${{ matrix.port }}:${{ matrix.port }}' \
+              -e SERVER_PORT='${{ matrix.port }}' \
+              -e RABBITMQ_HOST='${{ secrets.RABBITMQ_HOST }}' \
+              -e RABBITMQ_PORT='${{ secrets.RABBITMQ_PORT }}' \
+              -e RABBITMQ_USERNAME='${{ secrets.RABBITMQ_USERNAME }}' \
+              -e RABBITMQ_PASSWORD='${{ secrets.RABBITMQ_PASSWORD }}' \
+              -e AWS_REGION='${{ secrets.AWS_REGION }}' \
+              -e AWS_S3_BUCKET='${{ secrets.AWS_S3_BUCKET }}' \
+              -e STORAGE_PATH='/tmp/storage' \
+              -e AZURE_B2C_JWK_SET_URI='${{ secrets.AZURE_B2C_JWK_SET_URI }}' \
+              -e AZURE_B2C_ISSUER_URI='${{ secrets.AZURE_B2C_ISSUER_URI }}' \
+              -e AZURE_B2C_AUDIENCE='${{ secrets.AZURE_B2C_AUDIENCE }}' \
+              '${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}'
+          EOF
+
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/ec2_key.pem

@@ -19,10 +19,4 @@ public interface GuiaDespachoService {
     List<GuiaResponse> buscarPorFecha(LocalDate fecha);
 
     List<GuiaResponse> buscarHistorial(String transportista, LocalDate fecha);
-
-    GuiaResponse actualizarGuia(Long id, GuiaRequest request);
-
-    void eliminarGuia(Long id);
-
-    byte[] descargarGuia(Long id);
 }

@@ -28,9 +28,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(SecurityConfig.class)
 @TestPropertySource(properties = {
         "security.oauth2.jwk-set-uri=https://example.test/keys",
-        "security.oauth2.issuer=https://example.test/issuer",
+        "security.oauth2.issuer-uri=https://example.test/issuer",
         "security.oauth2.audience=test-audience",
-        "security.oauth2.roles-claim=appRoles"
 })
 class SecurityConfigTest {
 
@@ -99,7 +98,7 @@ class SecurityConfigTest {
                 .subject("usuario-prueba")
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(300))
-                .claim("appRoles", roles)
+                .claim("roles", roles)
                 .build();
     }
 }

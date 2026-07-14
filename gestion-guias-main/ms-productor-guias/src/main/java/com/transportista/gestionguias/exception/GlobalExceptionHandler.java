@@ -3,11 +3,14 @@ package com.transportista.gestionguias.exception;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.AmqpException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -41,6 +44,31 @@ public class GlobalExceptionHandler {
         return crearRespuesta(
                 HttpStatus.NOT_FOUND,
                 "El recurso solicitado no existe",
+                request.getRequestURI(),
+                null);
+    }
+
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<Map<String, Object>> manejarJsonInvalido(
+            Exception ex,
+            HttpServletRequest request) {
+        return crearRespuesta(
+                HttpStatus.BAD_REQUEST,
+                "El cuerpo de la solicitud no es valido",
+                request.getRequestURI(),
+                null);
+    }
+
+    @ExceptionHandler(AmqpException.class)
+    public ResponseEntity<Map<String, Object>> manejarRabbitMQ(
+            AmqpException ex,
+            HttpServletRequest request) {
+        LOGGER.error(
+                "RabbitMQ no disponible procesando {} {}: tipo={}",
+                request.getMethod(), request.getRequestURI(), ex.getClass().getName());
+        return crearRespuesta(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "El servicio de mensajeria no esta disponible",
                 request.getRequestURI(),
                 null);
     }

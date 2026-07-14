@@ -2,7 +2,9 @@ FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
-COPY target/ms-consumidor-guias-0.0.1-SNAPSHOT.jar app.jar
+COPY --chown=10001:10001 target/ms-consumidor-guias-0.0.1-SNAPSHOT.jar app.jar
+
+USER 10001:10001
 
 EXPOSE 8081
 

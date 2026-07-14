@@ -24,17 +24,14 @@ public class SecurityConfig {
     private final String jwkSetUri;
     private final String issuer;
     private final String audience;
-    private final String rolesClaim;
 
     public SecurityConfig(
             @Value("${security.oauth2.jwk-set-uri}") String jwkSetUri,
-            @Value("${security.oauth2.issuer}") String issuer,
-            @Value("${security.oauth2.audience}") String audience,
-            @Value("${security.oauth2.roles-claim}") String rolesClaim) {
+            @Value("${security.oauth2.issuer-uri}") String issuer,
+            @Value("${security.oauth2.audience}") String audience) {
         this.jwkSetUri = jwkSetUri;
         this.issuer = issuer;
         this.audience = audience;
-        this.rolesClaim = rolesClaim;
     }
 
     @Bean
@@ -57,7 +54,7 @@ public class SecurityConfig {
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
-        authoritiesConverter.setAuthoritiesClaimName(rolesClaim);
+        authoritiesConverter.setAuthoritiesClaimName("roles");
         authoritiesConverter.setAuthorityPrefix("ROLE_");
 
         JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
