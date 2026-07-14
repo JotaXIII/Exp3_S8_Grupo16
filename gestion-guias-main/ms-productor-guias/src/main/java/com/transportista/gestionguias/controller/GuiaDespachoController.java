@@ -5,11 +5,7 @@ import com.transportista.gestionguias.dto.GuiaResponse;
 import com.transportista.gestionguias.service.GuiaDespachoService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -66,34 +62,4 @@ public class GuiaDespachoController {
         return service.buscarPorFecha(fecha);
     }
 
-    @PutMapping("/{id}")
-    public GuiaResponse actualizarGuia(
-            @PathVariable Long id,
-            @Valid @RequestBody GuiaRequest request) {
-
-        return service.actualizarGuia(id, request);
-    }
-
-    @DeleteMapping("/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void eliminarGuia(@PathVariable Long id) {
-        service.eliminarGuia(id);
-    }
-
-    @GetMapping("/{id}/descargar")
-    public ResponseEntity<byte[]> descargarGuia(@PathVariable Long id) {
-
-        byte[] archivo = service.descargarGuia(id);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_PDF);
-        headers.setContentDisposition(
-                ContentDisposition.attachment()
-                        .filename("guia.pdf")
-                        .build());
-
-        return ResponseEntity.ok()
-                .headers(headers)
-                .body(archivo);
-    }
 }

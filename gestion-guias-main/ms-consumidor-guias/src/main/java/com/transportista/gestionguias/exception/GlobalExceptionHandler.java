@@ -18,13 +18,22 @@ public class GlobalExceptionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(GuiaProcesadaNoEncontradaException.class)
+    public ResponseEntity<Map<String, Object>> manejarNoEncontrada(
+            GuiaProcesadaNoEncontradaException ex,
+            HttpServletRequest request) {
+        return crearRespuesta(
+                HttpStatus.NOT_FOUND,
+                "El recurso solicitado no existe",
+                request.getRequestURI(),
+                null);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> manejarValidaciones(
+    public ResponseEntity<Map<String, Object>> manejarValidacion(
             MethodArgumentNotValidException ex,
             HttpServletRequest request) {
-        Object detalles = ex.getBindingResult()
-                .getFieldErrors()
-                .stream()
+        Object detalles = ex.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .toList();
         return crearRespuesta(
@@ -34,19 +43,8 @@ public class GlobalExceptionHandler {
                 detalles);
     }
 
-    @ExceptionHandler(RecursoNoEncontradoException.class)
-    public ResponseEntity<Map<String, Object>> manejarNoEncontrado(
-            RecursoNoEncontradoException ex,
-            HttpServletRequest request) {
-        return crearRespuesta(
-                HttpStatus.NOT_FOUND,
-                "El recurso solicitado no existe",
-                request.getRequestURI(),
-                null);
-    }
-
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> manejarException(
+    public ResponseEntity<Map<String, Object>> manejarErrorInterno(
             Exception ex,
             HttpServletRequest request) {
         LOGGER.error(

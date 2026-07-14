@@ -19,6 +19,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import com.transportista.gestionguias.dto.GuiaDespachoMessage;
 import com.transportista.gestionguias.entity.EstadoProcesamiento;
@@ -99,6 +100,54 @@ class GuiaProcesamientoServiceImplTest {
 
         assertEquals("S3 no disponible", exception.getMessage());
         verify(repository, never()).save(any(GuiaProcesada.class));
+        verify(archivoService).eliminarPdf(archivo);
+    }
+
+    @Test
+    void rechazaMensajeSinIdentificadorAntesDeProcesarlo() {
+        GuiaDespachoMessage mensaje = crearMensaje();
+        mensaje.setMensajeId(null);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.procesarGuia(mensaje));
+
+        assertEquals("mensajeId es obligatorio", exception.getMessage());
+        verifyNoInteractions(repository, archivoService, s3Service);
+    }
+
+    @Test
+    void confirmaDuplicadoDetectadoPorRestriccionUnica() {
+        GuiaDespachoMessage mensaje = crearMensaje();
+        File archivo = new File("GUIA-123.pdf");
+
+        when(repository.existsByMensajeId(mensaje.getMensajeId())).thenReturn(false, true);
+        when(archivoService.generarPdf(mensaje)).thenReturn(archivo);
+        when(s3Service.subirArchivo(archivo, mensaje.getTransportista(), archivo.getName()))
+                .thenReturn("2026/Transportista Uno/GUIA-123.pdf");
+        when(repository.save(any(GuiaProcesada.class)))
+                .thenThrow(new DataIntegrityViolationException("mensajeId duplicado"));
+
+        service.procesarGuia(mensaje);
+
+        verify(repository).save(any(GuiaProcesada.class));
+        verify(archivoService).eliminarPdf(archivo);
+    }
+
+    @Test
+    void propagaViolacionDeIntegridadQueNoEsDuplicado() {
+        GuiaDespachoMessage mensaje = crearMensaje();
+        File archivo = new File("GUIA-123.pdf");
+
+        when(repository.existsByMensajeId(mensaje.getMensajeId())).thenReturn(false, false);
+        when(archivoService.generarPdf(mensaje)).thenReturn(archivo);
+        when(s3Service.subirArchivo(archivo, mensaje.getTransportista(), archivo.getName()))
+                .thenReturn("2026/Transportista Uno/GUIA-123.pdf");
+        when(repository.save(any(GuiaProcesada.class)))
+                .thenThrow(new DataIntegrityViolationException("restriccion invalida"));
+
+        assertThrows(DataIntegrityViolationException.class, () -> service.procesarGuia(mensaje));
+
         verify(archivoService).eliminarPdf(archivo);
     }
 

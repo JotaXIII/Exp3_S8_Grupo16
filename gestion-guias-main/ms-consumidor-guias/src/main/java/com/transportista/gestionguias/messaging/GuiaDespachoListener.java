@@ -35,10 +35,10 @@ public class GuiaDespachoListener {
             procesamientoService.procesarGuia(mensaje);
         } catch (Exception ex) {
             LOGGER.error(
-                    "Error procesando guia: mensajeId={}, numeroGuia={}",
+                    "Error procesando guia: mensajeId={}, numeroGuia={}, tipo={}",
                     mensaje != null ? mensaje.getMensajeId() : null,
                     mensaje != null ? mensaje.getNumeroGuia() : null,
-                    ex);
+                    ex.getClass().getName());
             channel.basicReject(deliveryTag, false);
             return;
         }

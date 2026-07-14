@@ -1,7 +1,5 @@
 package com.transportista.gestionguias.config;
 
-import java.util.List;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +16,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
+import java.util.List;
 
 @Configuration
 public class SecurityConfig {
@@ -45,8 +44,11 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .anyRequest().hasRole("GESTOR_GUIAS")
-                )
+                        .requestMatchers("/api/guias-procesadas/*/descarga")
+                        .hasAnyRole("DESCARGA_GUIAS", "GESTOR_GUIAS")
+                        .requestMatchers("/api/guias-procesadas/**")
+                        .hasRole("GESTOR_GUIAS")
+                        .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
                 .build();
@@ -70,7 +72,6 @@ public class SecurityConfig {
         OAuth2TokenValidator<Jwt> issuerValidator = JwtValidators.createDefaultWithIssuer(issuer);
         OAuth2TokenValidator<Jwt> audienceValidator = jwt -> {
             List<String> audiences = jwt.getAudience();
-
             if (audiences.contains(audience)) {
                 return OAuth2TokenValidatorResult.success();
             }
@@ -78,14 +79,11 @@ public class SecurityConfig {
             OAuth2Error error = new OAuth2Error(
                     "invalid_token",
                     "El token no contiene la audiencia esperada",
-                    null
-            );
-
+                    null);
             return OAuth2TokenValidatorResult.failure(error);
         };
 
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(issuerValidator, audienceValidator));
-
         return decoder;
     }
 }

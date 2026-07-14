@@ -6,6 +6,7 @@ import com.transportista.gestionguias.entity.GuiaProcesada;
 import com.transportista.gestionguias.repository.GuiaProcesadaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -67,6 +68,15 @@ public class GuiaProcesamientoServiceImpl implements GuiaProcesamientoService {
                     mensaje.getMensajeId(),
                     mensaje.getNumeroGuia(),
                     s3Key);
+        } catch (DataIntegrityViolationException ex) {
+            if (repository.existsByMensajeId(mensaje.getMensajeId())) {
+                LOGGER.info(
+                        "Mensaje duplicado detectado al persistir: mensajeId={}, numeroGuia={}",
+                        mensaje.getMensajeId(),
+                        mensaje.getNumeroGuia());
+                return;
+            }
+            throw ex;
         } finally {
             eliminarArchivoTemporal(archivo);
         }
@@ -111,7 +121,10 @@ public class GuiaProcesamientoServiceImpl implements GuiaProcesamientoService {
         try {
             archivoService.eliminarPdf(archivo);
         } catch (RuntimeException ex) {
-            LOGGER.warn("No se pudo eliminar el PDF temporal {}", archivo.getAbsolutePath(), ex);
+            LOGGER.warn(
+                    "No se pudo eliminar el PDF temporal: archivo={}, tipo={}",
+                    archivo.getName(),
+                    ex.getClass().getName());
         }
     }
 }
