@@ -1,0 +1,251 @@
+name: CDY2204 CI/CD production
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "gestion-guias-main/ms-productor-guias/**"
+      - "gestion-guias-main/ms-consumidor-guias/**"
+      - "gestion-guias-main/docker-compose.yml"
+      - "scripts/ci/**"
+      - ".github/workflows/deploy.yml"
+
+concurrency:
+  group: gestion-guias-production
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PRODUCTOR_DIR: gestion-guias-main/ms-productor-guias
+  CONSUMIDOR_DIR: gestion-guias-main/ms-consumidor-guias
+  PRODUCTOR_IMAGE: ms-productor-guias
+  CONSUMIDOR_IMAGE: ms-consumidor-guias
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate repository and active configuration
+        run: bash scripts/ci/validate-repository.sh
+      - name: Validate Compose
+        env:
+          AZURE_B2C_JWK_SET_URI: https://example.invalid/jwks
+          AZURE_B2C_ISSUER_URI: https://example.invalid/issuer
+          AZURE_B2C_AUDIENCE: ci-audience
+          AWS_REGION: us-east-1
+          AWS_S3_BUCKET: ci-validation-bucket
+        run: docker compose -f gestion-guias-main/docker-compose.yml config --quiet
+
+  build-productor:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: ${{ env.PRODUCTOR_DIR }}/pom.xml
+      - name: Test producer
+        working-directory: ${{ env.PRODUCTOR_DIR }}
+        run: ./mvnw clean test
+      - name: Package producer
+        working-directory: ${{ env.PRODUCTOR_DIR }}
+        run: ./mvnw package -DskipTests
+      - name: Verify artifact and build image
+        run: |
+          set -Eeuo pipefail
+          test -s "$PRODUCTOR_DIR/target/gestion-guias-0.0.1-SNAPSHOT.jar"
+          sha256sum "$PRODUCTOR_DIR/target/gestion-guias-0.0.1-SNAPSHOT.jar" | tee "$PRODUCTOR_DIR/target/artifact.sha256"
+          docker build -t "$PRODUCTOR_IMAGE:${GITHUB_SHA::12}" "$PRODUCTOR_DIR"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: productor-${{ github.sha }}
+          path: |
+            ${{ env.PRODUCTOR_DIR }}/target/gestion-guias-0.0.1-SNAPSHOT.jar
+            ${{ env.PRODUCTOR_DIR }}/target/artifact.sha256
+            ${{ env.PRODUCTOR_DIR }}/target/surefire-reports/
+          retention-days: 3
+
+  build-consumidor:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: ${{ env.CONSUMIDOR_DIR }}/pom.xml
+      - name: Test consumer
+        working-directory: ${{ env.CONSUMIDOR_DIR }}
+        run: ./mvnw clean test
+      - name: Package consumer
+        working-directory: ${{ env.CONSUMIDOR_DIR }}
+        run: ./mvnw package -DskipTests
+      - name: Verify artifact and build image
+        run: |
+          set -Eeuo pipefail
+          test -s "$CONSUMIDOR_DIR/target/ms-consumidor-guias-0.0.1-SNAPSHOT.jar"
+          sha256sum "$CONSUMIDOR_DIR/target/ms-consumidor-guias-0.0.1-SNAPSHOT.jar" | tee "$CONSUMIDOR_DIR/target/artifact.sha256"
+          docker build -t "$CONSUMIDOR_IMAGE:${GITHUB_SHA::12}" "$CONSUMIDOR_DIR"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: consumidor-${{ github.sha }}
+          path: |
+            ${{ env.CONSUMIDOR_DIR }}/target/ms-consumidor-guias-0.0.1-SNAPSHOT.jar
+            ${{ env.CONSUMIDOR_DIR }}/target/artifact.sha256
+            ${{ env.CONSUMIDOR_DIR }}/target/surefire-reports/
+          retention-days: 3
+
+  validate-rabbitmq:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure RabbitMQ SSH
+        env:
+          SSH_KEY: ${{ secrets.EC2_RABBITMQ_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.EC2_RABBITMQ_KNOWN_HOSTS }}
+        run: bash scripts/ci/configure-ssh.sh
+      - name: Validate RabbitMQ EC2
+        env:
+          SSH_USER: ${{ secrets.EC2_SSH_USER }}
+          HOST: ${{ vars.EC2_RABBITMQ_HOST }}
+        run: bash scripts/ci/validate-rabbitmq.sh
+      - name: Remove SSH material
+        if: always()
+        run: rm -f ~/.ssh/id_ec2 ~/.ssh/known_hosts
+
+  deploy-productor:
+    needs: [build-productor, validate-rabbitmq]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: productor-${{ github.sha }}
+          path: artifact
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.EC2_PRODUCTOR_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.EC2_PRODUCTOR_KNOWN_HOSTS }}
+        run: bash scripts/ci/configure-ssh.sh
+      - name: Deploy producer with rollback
+        env:
+          SSH_USER: ${{ secrets.EC2_SSH_USER }}
+          HOST: ${{ vars.EC2_PRODUCTOR_HOST }}
+          PORT: ${{ vars.EC2_PRODUCTOR_PORT }}
+          RABBITMQ_HOST: ${{ vars.EC2_RABBITMQ_HOST }}
+          RABBITMQ_PORT: ${{ vars.RABBITMQ_PORT }}
+          RABBITMQ_USERNAME: ${{ secrets.RABBITMQ_USERNAME }}
+          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
+          AZURE_B2C_JWK_SET_URI: ${{ secrets.AZURE_B2C_JWK_SET_URI }}
+          AZURE_B2C_ISSUER_URI: ${{ secrets.AZURE_B2C_ISSUER_URI }}
+          AZURE_B2C_AUDIENCE: ${{ secrets.AZURE_B2C_AUDIENCE }}
+        run: bash scripts/ci/deploy-service.sh productor artifact/gestion-guias-0.0.1-SNAPSHOT.jar
+      - if: always()
+        run: rm -f ~/.ssh/id_ec2 ~/.ssh/known_hosts
+
+  deploy-consumidor:
+    needs: [build-consumidor, validate-rabbitmq]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: consumidor-${{ github.sha }}
+          path: artifact
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.EC2_CONSUMIDOR_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.EC2_CONSUMIDOR_KNOWN_HOSTS }}
+        run: bash scripts/ci/configure-ssh.sh
+      - name: Deploy consumer with rollback
+        env:
+          SSH_USER: ${{ secrets.EC2_SSH_USER }}
+          HOST: ${{ vars.EC2_CONSUMIDOR_HOST }}
+          PORT: ${{ vars.EC2_CONSUMIDOR_PORT }}
+          RABBITMQ_HOST: ${{ vars.EC2_RABBITMQ_HOST }}
+          RABBITMQ_PORT: ${{ vars.RABBITMQ_PORT }}
+          RABBITMQ_USERNAME: ${{ secrets.RABBITMQ_USERNAME }}
+          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          AZURE_B2C_JWK_SET_URI: ${{ secrets.AZURE_B2C_JWK_SET_URI }}
+          AZURE_B2C_ISSUER_URI: ${{ secrets.AZURE_B2C_ISSUER_URI }}
+          AZURE_B2C_AUDIENCE: ${{ secrets.AZURE_B2C_AUDIENCE }}
+        run: bash scripts/ci/deploy-service.sh consumidor artifact/ms-consumidor-guias-0.0.1-SNAPSHOT.jar
+      - if: always()
+        run: rm -f ~/.ssh/id_ec2 ~/.ssh/known_hosts
+
+  end-to-end:
+    needs: [deploy-productor, deploy-consumidor]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Obtain and validate OAuth token
+        id: oauth
+        env:
+          AZURE_TOKEN_URL: ${{ secrets.AZURE_TOKEN_URL }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SCOPE: ${{ secrets.AZURE_SCOPE }}
+        run: bash scripts/ci/get-token.sh
+      - name: API Gateway security and E2E tests
+        env:
+          API_GATEWAY_BASE_URL: ${{ vars.API_GATEWAY_BASE_URL }}
+          ACCESS_TOKEN: ${{ steps.oauth.outputs.access_token }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          RUN_ID: ${{ github.run_id }}
+        run: bash scripts/ci/e2e.sh
+      - name: Configure RabbitMQ SSH for post-check
+        env:
+          SSH_KEY: ${{ secrets.EC2_RABBITMQ_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.EC2_RABBITMQ_KNOWN_HOSTS }}
+        run: bash scripts/ci/configure-ssh.sh
+      - name: Verify RabbitMQ after processing
+        env:
+          SSH_USER: ${{ secrets.EC2_SSH_USER }}
+          HOST: ${{ vars.EC2_RABBITMQ_HOST }}
+        run: bash scripts/ci/validate-rabbitmq.sh
+      - if: always()
+        run: rm -f ~/.ssh/id_ec2 ~/.ssh/known_hosts
+      - name: Upload sanitized E2E result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ github.run_id }}
+          path: e2e-summary.txt
+          if-no-files-found: ignore
+          retention-days: 3
+
+  summary:
+    if: always()
+    needs: [validate, build-productor, build-consumidor, validate-rabbitmq, deploy-productor, deploy-consumidor, end-to-end]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Workflow summary
+        run: |
+          {
+            echo "# CDY2204 deployment $GITHUB_SHA"
+            echo "| Stage | Result |"
+            echo "|---|---|"
+            echo "| Validation | ${{ needs.validate.result }} |"
+            echo "| Producer build/test | ${{ needs.build-productor.result }} |"
+            echo "| Consumer build/test | ${{ needs.build-consumidor.result }} |"
+            echo "| RabbitMQ | ${{ needs.validate-rabbitmq.result }} |"
+            echo "| Producer deployment | ${{ needs.deploy-productor.result }} |"
+            echo "| Consumer deployment | ${{ needs.deploy-consumidor.result }} |"
+            echo "| OAuth/API Gateway/RabbitMQ/S3/E2E/cleanup | ${{ needs.end-to-end.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

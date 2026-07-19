@@ -12,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -22,6 +23,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -47,9 +49,9 @@ class SecurityConfigTest {
     @BeforeEach
     void setUp() {
         when(jwtDecoder.decode("descarga-token"))
-                .thenReturn(jwt("descarga-token", List.of("DESCARGA_GUIAS")));
+                .thenReturn(jwt("descarga-token", "DESCARGA_GUIAS"));
         when(jwtDecoder.decode("gestor-token"))
-                .thenReturn(jwt("gestor-token", List.of("GESTOR_GUIAS")));
+                .thenReturn(jwt("gestor-token", "GESTOR_GUIAS"));
     }
 
     @Test
@@ -91,14 +93,44 @@ class SecurityConfigTest {
         verify(service).crearGuia(any());
     }
 
-    private Jwt jwt(String tokenValue, List<String> roles) {
+    @Test
+    void convierteScopeGestorGuiasEnAuthorityEstandar() {
+        var authorities = new JwtGrantedAuthoritiesConverter()
+                .convert(jwt("gestor-scope", "GESTOR_GUIAS"));
+
+        assertThat(authorities)
+                .extracting("authority")
+                .containsExactly("SCOPE_GESTOR_GUIAS");
+    }
+
+    @Test
+    void convierteMultiplesScopesSeparadosPorEspacios() {
+        var authorities = new JwtGrantedAuthoritiesConverter()
+                .convert(jwt("multiples-scopes", "OTRO_SCOPE GESTOR_GUIAS"));
+
+        assertThat(authorities)
+                .extracting("authority")
+                .containsExactlyInAnyOrder("SCOPE_OTRO_SCOPE", "SCOPE_GESTOR_GUIAS");
+    }
+
+    @Test
+    void claimScpInexistenteNoConcedeAutoridades() {
+        var authorities = new JwtGrantedAuthoritiesConverter()
+                .convert(jwt("sin-scopes", null));
+
+        assertThat(authorities).isEmpty();
+    }
+
+    private Jwt jwt(String tokenValue, String scopes) {
         Instant now = Instant.now();
-        return Jwt.withTokenValue(tokenValue)
+        Jwt.Builder builder = Jwt.withTokenValue(tokenValue)
                 .header("alg", "none")
                 .subject("usuario-prueba")
                 .issuedAt(now)
-                .expiresAt(now.plusSeconds(300))
-                .claim("roles", roles)
-                .build();
+                .expiresAt(now.plusSeconds(300));
+        if (scopes != null) {
+            builder.claim("scp", scopes);
+        }
+        return builder.build();
     }
 }
