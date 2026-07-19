@@ -14,12 +14,12 @@ for name in SSH_USER HOST PORT RABBITMQ_HOST RABBITMQ_PORT RABBITMQ_USERNAME RAB
 done
 test -s "$jar"
 sha=${GITHUB_SHA:0:12}
-release="/opt/gestion-guias/releases/$service/$sha"
+release="/home/$SSH_USER/gestion-guias/releases/$service/$sha"
 local_sum=$(sha256sum "$jar" | awk '{print $1}')
 
 ssh -i "$HOME/.ssh/id_ec2" "$SSH_USER@$HOST" "mkdir -p '$release'"
 scp -i "$HOME/.ssh/id_ec2" "$jar" "$SSH_USER@$HOST:$release/$jar_name"
-remote_sum=$(ssh -i "$HOME/.ssh/id_ec2" "$SSH_USER@$HOST" "sha256sum '$release/$jar_name' | awk '{print \\$1}'")
+remote_sum=$(ssh -i "$HOME/.ssh/id_ec2" "$SSH_USER@$HOST" "sha256sum '$release/$jar_name'" | awk '{print $1}')
 test "$local_sum" = "$remote_sum" || { echo "Remote checksum mismatch" >&2; exit 1; }
 
 printf '%s\n' 'FROM eclipse-temurin:17-jre' 'WORKDIR /app' "COPY $jar_name app.jar" 'USER 10001:10001' "EXPOSE $PORT" 'ENTRYPOINT ["java","-jar","app.jar"]' |
