@@ -14,6 +14,8 @@ public interface GuiaDespachoService {
 
     GuiaResponse obtenerGuia(Long id);
 
+    void eliminarGuia(Long id);
+
     List<GuiaResponse> buscarPorTransportista(String transportista);
 
     List<GuiaResponse> buscarPorFecha(LocalDate fecha);

@@ -37,6 +37,12 @@ public class GuiaDespachoController {
         return service.obtenerGuia(id);
     }
 
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void eliminarGuia(@PathVariable Long id) {
+        service.eliminarGuia(id);
+    }
+
     @GetMapping("/historial")
     public List<GuiaResponse> buscarHistorial(
             @RequestParam(required = false) String transportista,

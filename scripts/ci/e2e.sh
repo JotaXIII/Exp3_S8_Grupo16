@@ -6,7 +6,7 @@ set -Eeuo pipefail
 : "${RUN_ID:?Missing RUN_ID}"
 base=${API_GATEWAY_BASE_URL%/}
 work=$(mktemp -d)
-numero_guia= s3_key= created=false
+id= numero_guia= s3_key= created=false
 
 sanitize() { head -c 500 "$1" | sed -E 's/(token|secret|password|credential)[^,}]*/\1=***MASKED***/Ig'; }
 request() {
@@ -26,6 +26,7 @@ cleanup() {
   set +e
   if [[ $created == true && -n $numero_guia ]]; then
     AUTHENTICATED=1 request 204 DELETE "/api/guias-procesadas/$numero_guia" "" "$work/cleanup"
+    [[ -n $id ]] && AUTHENTICATED=1 request 204 DELETE "/api/guias/$id" "" "$work/cleanup-producer"
     if [[ -n $s3_key && -n ${AWS_ACCESS_KEY_ID:-} ]]; then
       aws s3api head-object --bucket "$AWS_S3_BUCKET" --key "$s3_key" >/dev/null 2>&1 && echo "Cleanup warning: S3 object still exists" >&2
     fi
@@ -100,7 +101,6 @@ request 404 GET /api/guias-procesadas/999/descarga
 request 404 PUT /api/guias-procesadas/999 "$update_body"
 request 404 DELETE /api/guias-procesadas/999
 request 204 DELETE "/api/guias-procesadas/$numero_guia"
-created=false
 request 404 GET "/api/guias-procesadas/$numero_guia"
 if [[ -n ${AWS_ACCESS_KEY_ID:-} ]]; then
   if aws s3api head-object --bucket "$AWS_S3_BUCKET" --key "$s3_key" >/dev/null 2>&1; then
@@ -108,8 +108,11 @@ if [[ -n ${AWS_ACCESS_KEY_ID:-} ]]; then
     exit 1
   fi
 fi
+request 204 DELETE "/api/guias/$id"
+request 404 GET "/api/guias/$id"
+created=false
 
 printf '%s\n' \
   'Security API Gateway: PASS' 'Creation and RabbitMQ processing: PASS' \
-  'S3/PDF validation: PASS' 'Update: PASS' 'Delete and cleanup: PASS' > e2e-summary.txt
+  'S3/PDF validation: PASS' 'Update: PASS' 'Consumer, S3 and producer cleanup: PASS' > e2e-summary.txt
 cat e2e-summary.txt >> "$GITHUB_STEP_SUMMARY"

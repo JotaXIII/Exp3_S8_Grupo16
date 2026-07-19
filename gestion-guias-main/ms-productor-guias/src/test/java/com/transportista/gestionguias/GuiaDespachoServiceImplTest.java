@@ -4,6 +4,7 @@ import com.transportista.gestionguias.dto.GuiaDespachoMessage;
 import com.transportista.gestionguias.dto.GuiaRequest;
 import com.transportista.gestionguias.dto.GuiaResponse;
 import com.transportista.gestionguias.entity.GuiaDespacho;
+import com.transportista.gestionguias.exception.RecursoNoEncontradoException;
 import com.transportista.gestionguias.messaging.GuiaDespachoPublisher;
 import com.transportista.gestionguias.repository.GuiaDespachoRepository;
 import com.transportista.gestionguias.service.GuiaDespachoServiceImpl;
@@ -13,6 +14,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -37,12 +40,11 @@ class GuiaDespachoServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new GuiaDespachoServiceImpl(repository, publisher);
-        when(repository.save(any(GuiaDespacho.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
     void crearGuiaPersisteYPublicaSinGenerarArchivo() {
+        prepararPersistencia();
         GuiaResponse response = service.crearGuia(crearRequest());
 
         ArgumentCaptor<GuiaDespacho> guiaCaptor = ArgumentCaptor.forClass(GuiaDespacho.class);
@@ -67,6 +69,7 @@ class GuiaDespachoServiceImplTest {
 
     @Test
     void crearGuiaMarcaErrorCuandoFallaLaPublicacion() {
+        prepararPersistencia();
         doThrow(new RuntimeException("RabbitMQ no disponible"))
                 .when(publisher)
                 .publicarGuia(any(GuiaDespachoMessage.class));
@@ -82,11 +85,35 @@ class GuiaDespachoServiceImplTest {
         assertEquals("ERROR_PUBLICACION", guiaCaptor.getAllValues().get(1).getEstado());
     }
 
+    @Test
+    void eliminarGuiaEliminaElRegistroExistente() {
+        GuiaDespacho guia = new GuiaDespacho();
+        when(repository.findById(1L)).thenReturn(Optional.of(guia));
+
+        service.eliminarGuia(1L);
+
+        verify(repository).delete(guia);
+    }
+
+    @Test
+    void eliminarGuiaInexistenteRetornaError() {
+        when(repository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(
+                RecursoNoEncontradoException.class,
+                () -> service.eliminarGuia(999L));
+    }
+
     private GuiaRequest crearRequest() {
         GuiaRequest request = new GuiaRequest();
         request.setTransportista("Transportista Uno");
         request.setCliente("Cliente Uno");
         request.setDireccionDestino("Direccion 123");
         return request;
+    }
+
+    private void prepararPersistencia() {
+        when(repository.save(any(GuiaDespacho.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 }

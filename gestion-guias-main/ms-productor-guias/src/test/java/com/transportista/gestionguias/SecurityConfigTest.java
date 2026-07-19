@@ -25,6 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -91,6 +92,15 @@ class SecurityConfigTest {
                 .andExpect(status().isAccepted());
 
         verify(service).crearGuia(any());
+    }
+
+    @Test
+    void gestorGuiasPuedeEliminarSolicitud() throws Exception {
+        mockMvc.perform(delete("/api/guias/1")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer gestor-token"))
+                .andExpect(status().isNoContent());
+
+        verify(service).eliminarGuia(1L);
     }
 
     @Test

@@ -80,6 +80,14 @@ public class GuiaDespachoServiceImpl implements GuiaDespachoService {
     }
 
     @Override
+    public void eliminarGuia(Long id) {
+        GuiaDespacho guia = repository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "No existe una guia con id " + id));
+        repository.delete(guia);
+    }
+
+    @Override
     public List<GuiaResponse> buscarPorTransportista(String transportista) {
         return repository.findByTransportistaIgnoreCase(transportista)
                 .stream().map(this::convertir).toList();
