@@ -143,7 +143,7 @@ jobs:
           SSH_USER: ${{ secrets.EC2_SSH_USER }}
           HOST: ${{ vars.EC2_PRODUCTOR_HOST }}
           PORT: ${{ vars.EC2_PRODUCTOR_PORT }}
-          RABBITMQ_HOST: ${{ vars.EC2_RABBITMQ_HOST }}
+          RABBITMQ_HOST: ${{ vars.RABBITMQ_HOST }}
           RABBITMQ_PORT: ${{ vars.RABBITMQ_PORT }}
           RABBITMQ_USERNAME: ${{ secrets.RABBITMQ_USERNAME }}
           RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
@@ -173,7 +173,7 @@ jobs:
           SSH_USER: ${{ secrets.EC2_SSH_USER }}
           HOST: ${{ vars.EC2_CONSUMIDOR_HOST }}
           PORT: ${{ vars.EC2_CONSUMIDOR_PORT }}
-          RABBITMQ_HOST: ${{ vars.EC2_RABBITMQ_HOST }}
+          RABBITMQ_HOST: ${{ vars.RABBITMQ_HOST }}
           RABBITMQ_PORT: ${{ vars.RABBITMQ_PORT }}
           RABBITMQ_USERNAME: ${{ secrets.RABBITMQ_USERNAME }}
           RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}

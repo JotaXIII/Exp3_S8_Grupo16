@@ -5,12 +5,21 @@ for name in AZURE_TOKEN_URL AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SCOPE; do
   test -n "${!name:-}" || { echo "Missing $name" >&2; exit 1; }
 done
 
-response=$(curl --fail-with-body --silent --show-error --request POST "$AZURE_TOKEN_URL" \
+result=$(curl --silent --show-error --request POST "$AZURE_TOKEN_URL" \
+  --write-out $'\n%{http_code}' \
   --header 'Content-Type: application/x-www-form-urlencoded' \
   --data-urlencode "client_id=$AZURE_CLIENT_ID" \
   --data-urlencode "client_secret=$AZURE_CLIENT_SECRET" \
   --data-urlencode "scope=$AZURE_SCOPE" \
   --data-urlencode 'grant_type=client_credentials')
+status=${result##*$'\n'}
+response=${result%$'\n'*}
+if [[ $status != 200 ]]; then
+  error=$(jq -r '.error // "unknown_error"' <<<"$response")
+  description=$(jq -r '.error_description // "Azure did not return a description"' <<<"$response")
+  printf 'OAuth request failed: HTTP %s, %s: %s\n' "$status" "$error" "$description" >&2
+  exit 1
+fi
 token=$(jq -er '.access_token' <<<"$response")
 echo "::add-mask::$token"
 

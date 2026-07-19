@@ -17,6 +17,8 @@ sha=${GITHUB_SHA:0:12}
 release="/home/$SSH_USER/gestion-guias/releases/$service/$sha"
 local_sum=$(sha256sum "$jar" | awk '{print $1}')
 
+ssh -i "$HOME/.ssh/id_ec2" "$SSH_USER@$HOST" \
+  "timeout 5 bash -c '</dev/tcp/$RABBITMQ_HOST/$RABBITMQ_PORT'"
 ssh -i "$HOME/.ssh/id_ec2" "$SSH_USER@$HOST" "mkdir -p '$release'"
 scp -i "$HOME/.ssh/id_ec2" "$jar" "$SSH_USER@$HOST:$release/$jar_name"
 remote_sum=$(ssh -i "$HOME/.ssh/id_ec2" "$SSH_USER@$HOST" "sha256sum '$release/$jar_name'" | awk '{print $1}')
