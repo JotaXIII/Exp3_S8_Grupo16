@@ -2,10 +2,11 @@
 # Verifica el estado de RabbitMQ.
 set -Eeuo pipefail
 : "${SSH_USER:?Missing SSH_USER}" "${HOST:?Missing RabbitMQ host}"
+: "${RABBITMQ_CONTAINER:?Missing RabbitMQ container}"
 
-ssh -i "$HOME/.ssh/id_ec2" "$SSH_USER@$HOST" 'bash -se' <<'REMOTE'
+ssh -i "$HOME/.ssh/id_ec2" "$SSH_USER@$HOST" 'bash -se' -- "$RABBITMQ_CONTAINER" <<'REMOTE'
 set -Eeuo pipefail
-container=guias-rabbitmq
+container=$1
 test "$(docker inspect -f '{{.State.Running}}' "$container")" = true
 restart=$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' "$container")
 case "$restart" in unless-stopped|always) ;; *) echo "Unsafe restart policy: $restart" >&2; exit 1;; esac
