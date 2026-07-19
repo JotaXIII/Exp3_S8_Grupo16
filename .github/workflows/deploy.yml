@@ -119,6 +119,7 @@ jobs:
           SSH_USER: ${{ secrets.EC2_SSH_USER }}
           HOST: ${{ vars.EC2_RABBITMQ_HOST }}
           RABBITMQ_CONTAINER: ${{ vars.RABBITMQ_CONTAINER }}
+          REQUIRE_CONSUMER: "false"
         run: bash scripts/ci/validate-rabbitmq.sh
       - name: Remove SSH material
         if: always()
@@ -220,6 +221,7 @@ jobs:
           SSH_USER: ${{ secrets.EC2_SSH_USER }}
           HOST: ${{ vars.EC2_RABBITMQ_HOST }}
           RABBITMQ_CONTAINER: ${{ vars.RABBITMQ_CONTAINER }}
+          REQUIRE_CONSUMER: "true"
         run: bash scripts/ci/validate-rabbitmq.sh
       - if: always()
         run: rm -f ~/.ssh/id_ec2 ~/.ssh/known_hosts
