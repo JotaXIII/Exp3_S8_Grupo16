@@ -6,6 +6,7 @@ import com.transportista.gestionguias.dto.GuiaProcesadaResponse;
 import com.transportista.gestionguias.entity.EstadoProcesamiento;
 import com.transportista.gestionguias.entity.GuiaProcesada;
 import com.transportista.gestionguias.exception.GuiaProcesadaNoEncontradaException;
+import com.transportista.gestionguias.messaging.GuiaEstadoPublisher;
 import com.transportista.gestionguias.repository.GuiaProcesadaRepository;
 import com.transportista.gestionguias.service.ArchivoService;
 import com.transportista.gestionguias.service.GuiaProcesadaServiceImpl;
@@ -45,11 +46,18 @@ class GuiaProcesadaServiceImplTest {
     @Mock
     private S3Service s3Service;
 
+    @Mock
+    private GuiaEstadoPublisher estadoPublisher;
+
     private GuiaProcesadaServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new GuiaProcesadaServiceImpl(repository, archivoService, s3Service);
+        service = new GuiaProcesadaServiceImpl(
+                repository,
+                archivoService,
+                s3Service,
+                estadoPublisher);
     }
 
     @Test
@@ -130,8 +138,12 @@ class GuiaProcesadaServiceImplTest {
 
         service.eliminar(guia.getNumeroGuia());
 
-        InOrder orden = inOrder(s3Service, repository);
+        InOrder orden = inOrder(s3Service, estadoPublisher, repository);
         orden.verify(s3Service).eliminarArchivo(guia.getS3Key());
+        orden.verify(estadoPublisher).publicarEstado(
+                guia.getMensajeId(),
+                guia.getNumeroGuia(),
+                "ELIMINADA");
         orden.verify(repository).delete(guia);
     }
 

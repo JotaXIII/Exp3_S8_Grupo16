@@ -24,6 +24,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import com.transportista.gestionguias.dto.GuiaDespachoMessage;
 import com.transportista.gestionguias.entity.EstadoProcesamiento;
 import com.transportista.gestionguias.entity.GuiaProcesada;
+import com.transportista.gestionguias.messaging.GuiaEstadoPublisher;
 import com.transportista.gestionguias.repository.GuiaProcesadaRepository;
 import com.transportista.gestionguias.service.ArchivoService;
 import com.transportista.gestionguias.service.GuiaProcesamientoServiceImpl;
@@ -41,11 +42,18 @@ class GuiaProcesamientoServiceImplTest {
     @Mock
     private S3Service s3Service;
 
+    @Mock
+    private GuiaEstadoPublisher estadoPublisher;
+
     private GuiaProcesamientoServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new GuiaProcesamientoServiceImpl(repository, archivoService, s3Service);
+        service = new GuiaProcesamientoServiceImpl(
+                repository,
+                archivoService,
+                s3Service,
+                estadoPublisher);
     }
 
     @Test
@@ -64,6 +72,10 @@ class GuiaProcesamientoServiceImplTest {
         ArgumentCaptor<GuiaProcesada> guiaCaptor = ArgumentCaptor.forClass(GuiaProcesada.class);
         verify(repository).save(guiaCaptor.capture());
         verify(archivoService).eliminarPdf(archivo);
+        verify(estadoPublisher).publicarEstado(
+                mensaje.getMensajeId(),
+                mensaje.getNumeroGuia(),
+                "PROCESADA");
 
         GuiaProcesada guia = guiaCaptor.getValue();
         assertEquals(mensaje.getMensajeId(), guia.getMensajeId());
@@ -82,6 +94,10 @@ class GuiaProcesamientoServiceImplTest {
 
         verify(repository, never()).save(any(GuiaProcesada.class));
         verifyNoInteractions(archivoService, s3Service);
+        verify(estadoPublisher).publicarEstado(
+                mensaje.getMensajeId(),
+                mensaje.getNumeroGuia(),
+                "PROCESADA");
     }
 
     @Test
@@ -101,6 +117,10 @@ class GuiaProcesamientoServiceImplTest {
         assertEquals("S3 no disponible", exception.getMessage());
         verify(repository, never()).save(any(GuiaProcesada.class));
         verify(archivoService).eliminarPdf(archivo);
+        verify(estadoPublisher).publicarEstado(
+                mensaje.getMensajeId(),
+                mensaje.getNumeroGuia(),
+                "ERROR_PROCESAMIENTO");
     }
 
     @Test

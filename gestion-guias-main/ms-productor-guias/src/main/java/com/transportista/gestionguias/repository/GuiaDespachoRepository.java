@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 public interface GuiaDespachoRepository extends JpaRepository<GuiaDespacho, Long> {
 
@@ -15,4 +17,6 @@ public interface GuiaDespachoRepository extends JpaRepository<GuiaDespacho, Long
     List<GuiaDespacho> findByTransportistaIgnoreCaseAndFechaEmision(String transportista, LocalDate fechaEmision);
 
     boolean existsByNumeroGuia(String numeroGuia);
+
+    Optional<GuiaDespacho> findByMensajeId(UUID mensajeId);
 }

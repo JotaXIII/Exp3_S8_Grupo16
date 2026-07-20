@@ -3,6 +3,7 @@ package com.transportista.gestionguias.service;
 import com.transportista.gestionguias.dto.GuiaDespachoMessage;
 import com.transportista.gestionguias.entity.EstadoProcesamiento;
 import com.transportista.gestionguias.entity.GuiaProcesada;
+import com.transportista.gestionguias.messaging.GuiaEstadoPublisher;
 import com.transportista.gestionguias.repository.GuiaProcesadaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,14 +21,17 @@ public class GuiaProcesamientoServiceImpl implements GuiaProcesamientoService {
     private final GuiaProcesadaRepository repository;
     private final ArchivoService archivoService;
     private final S3Service s3Service;
+    private final GuiaEstadoPublisher estadoPublisher;
 
     public GuiaProcesamientoServiceImpl(
             GuiaProcesadaRepository repository,
             ArchivoService archivoService,
-            S3Service s3Service) {
+            S3Service s3Service,
+            GuiaEstadoPublisher estadoPublisher) {
         this.repository = repository;
         this.archivoService = archivoService;
         this.s3Service = s3Service;
+        this.estadoPublisher = estadoPublisher;
     }
 
     @Override
@@ -36,6 +40,7 @@ public class GuiaProcesamientoServiceImpl implements GuiaProcesamientoService {
 
         if (repository.existsByMensajeId(mensaje.getMensajeId())) {
             LOGGER.info("Mensaje de guia ya procesado: mensajeId={}", mensaje.getMensajeId());
+            publicarEstado(mensaje, EstadoProcesamiento.PROCESADA.name());
             return;
         }
 
@@ -74,12 +79,26 @@ public class GuiaProcesamientoServiceImpl implements GuiaProcesamientoService {
                         "Mensaje duplicado detectado al persistir: mensajeId={}, numeroGuia={}",
                         mensaje.getMensajeId(),
                         mensaje.getNumeroGuia());
+                publicarEstado(mensaje, EstadoProcesamiento.PROCESADA.name());
                 return;
             }
+            publicarEstado(mensaje, "ERROR_PROCESAMIENTO");
+            throw ex;
+        } catch (RuntimeException ex) {
+            publicarEstado(mensaje, "ERROR_PROCESAMIENTO");
             throw ex;
         } finally {
             eliminarArchivoTemporal(archivo);
         }
+
+        publicarEstado(mensaje, EstadoProcesamiento.PROCESADA.name());
+    }
+
+    private void publicarEstado(GuiaDespachoMessage mensaje, String estado) {
+        estadoPublisher.publicarEstado(
+                mensaje.getMensajeId(),
+                mensaje.getNumeroGuia(),
+                estado);
     }
 
     private void validarMensaje(GuiaDespachoMessage mensaje) {

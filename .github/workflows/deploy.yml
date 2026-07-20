@@ -225,6 +225,60 @@ jobs:
         run: bash scripts/ci/validate-rabbitmq.sh
       - if: always()
         run: rm -f ~/.ssh/id_ec2 ~/.ssh/known_hosts
+      - name: Configure producer SSH for database reset
+        env:
+          SSH_KEY: ${{ secrets.EC2_PRODUCTOR_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.EC2_PRODUCTOR_KNOWN_HOSTS }}
+        run: bash scripts/ci/configure-ssh.sh
+      - name: Reset producer H2 database
+        env:
+          SSH_USER: ${{ secrets.EC2_SSH_USER }}
+          HOST: ${{ vars.EC2_PRODUCTOR_HOST }}
+          CONTAINER: ms-productor-guias
+          PORT: ${{ vars.EC2_PRODUCTOR_PORT }}
+        run: bash scripts/ci/reset-h2-service.sh
+      - if: always()
+        run: rm -f ~/.ssh/id_ec2 ~/.ssh/known_hosts
+      - name: Configure consumer SSH for database reset
+        env:
+          SSH_KEY: ${{ secrets.EC2_CONSUMIDOR_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.EC2_CONSUMIDOR_KNOWN_HOSTS }}
+        run: bash scripts/ci/configure-ssh.sh
+      - name: Reset consumer H2 database
+        env:
+          SSH_USER: ${{ secrets.EC2_SSH_USER }}
+          HOST: ${{ vars.EC2_CONSUMIDOR_HOST }}
+          CONTAINER: ms-consumidor-guias
+          PORT: ${{ vars.EC2_CONSUMIDOR_PORT }}
+        run: bash scripts/ci/reset-h2-service.sh
+      - if: always()
+        run: rm -f ~/.ssh/id_ec2 ~/.ssh/known_hosts
+      - name: Verify empty databases after reset
+        env:
+          API_GATEWAY_BASE_URL: ${{ vars.API_GATEWAY_BASE_URL }}
+          ACCESS_TOKEN: ${{ steps.oauth.outputs.access_token }}
+        run: |
+          set -Eeuo pipefail
+          base=${API_GATEWAY_BASE_URL%/}
+          for path in /api/guias /api/guias-procesadas; do
+            body=$(curl -fsS -H "Authorization: Bearer $ACCESS_TOKEN" "$base$path")
+            jq -e 'type == "array" and length == 0' <<<"$body" >/dev/null
+          done
+          echo 'Producer and consumer databases: EMPTY' >> "$GITHUB_STEP_SUMMARY"
+      - name: Configure RabbitMQ SSH after database reset
+        env:
+          SSH_KEY: ${{ secrets.EC2_RABBITMQ_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.EC2_RABBITMQ_KNOWN_HOSTS }}
+        run: bash scripts/ci/configure-ssh.sh
+      - name: Verify RabbitMQ consumer after database reset
+        env:
+          SSH_USER: ${{ secrets.EC2_SSH_USER }}
+          HOST: ${{ vars.EC2_RABBITMQ_HOST }}
+          RABBITMQ_CONTAINER: ${{ vars.RABBITMQ_CONTAINER }}
+          REQUIRE_CONSUMER: "true"
+        run: bash scripts/ci/validate-rabbitmq.sh
+      - if: always()
+        run: rm -f ~/.ssh/id_ec2 ~/.ssh/known_hosts
       - name: Upload sanitized E2E result
         if: always()
         uses: actions/upload-artifact@v6

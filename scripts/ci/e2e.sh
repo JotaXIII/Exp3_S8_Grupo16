@@ -69,7 +69,14 @@ test "$processed" = true
 jq -e --arg n "$numero_guia" --arg t "$transportista" '.numeroGuia==$n and .transportista==$t and (.s3Key|length>0) and (.nombreArchivo|length>0)' "$work/processed.json" >/dev/null
 s3_key=$(jq -r '.s3Key' "$work/processed.json")
 
-request 200 GET "/api/guias/$id"
+estado_productor=
+for _ in $(seq 1 10); do
+  request 200 GET "/api/guias/$id" "" "$work/producer-state.json"
+  estado_productor=$(jq -r '.estado' "$work/producer-state.json")
+  [[ $estado_productor == PROCESADA ]] && break
+  sleep 2
+done
+test "$estado_productor" = PROCESADA
 request 200 GET "/api/guias/transportista/$(jq -rn --arg v "$transportista" '$v|@uri')"
 request 200 GET "/api/guias/fecha/$fecha"
 query="transportista=$(jq -rn --arg v "$transportista" '$v|@uri')&fecha=$fecha"

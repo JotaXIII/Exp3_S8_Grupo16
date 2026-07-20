@@ -6,6 +6,7 @@ import com.transportista.gestionguias.dto.GuiaProcesadaResponse;
 import com.transportista.gestionguias.entity.EstadoProcesamiento;
 import com.transportista.gestionguias.entity.GuiaProcesada;
 import com.transportista.gestionguias.exception.GuiaProcesadaNoEncontradaException;
+import com.transportista.gestionguias.messaging.GuiaEstadoPublisher;
 import com.transportista.gestionguias.repository.GuiaProcesadaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,14 +25,17 @@ public class GuiaProcesadaServiceImpl implements GuiaProcesadaService {
     private final GuiaProcesadaRepository repository;
     private final ArchivoService archivoService;
     private final S3Service s3Service;
+    private final GuiaEstadoPublisher estadoPublisher;
 
     public GuiaProcesadaServiceImpl(
             GuiaProcesadaRepository repository,
             ArchivoService archivoService,
-            S3Service s3Service) {
+            S3Service s3Service,
+            GuiaEstadoPublisher estadoPublisher) {
         this.repository = repository;
         this.archivoService = archivoService;
         this.s3Service = s3Service;
+        this.estadoPublisher = estadoPublisher;
     }
 
     @Override
@@ -113,6 +117,10 @@ public class GuiaProcesadaServiceImpl implements GuiaProcesadaService {
     public void eliminar(String numeroGuia) {
         GuiaProcesada guia = buscarEntidad(numeroGuia);
         s3Service.eliminarArchivo(guia.getS3Key());
+        estadoPublisher.publicarEstado(
+                guia.getMensajeId(),
+                guia.getNumeroGuia(),
+                "ELIMINADA");
         repository.delete(guia);
 
         LOGGER.info(

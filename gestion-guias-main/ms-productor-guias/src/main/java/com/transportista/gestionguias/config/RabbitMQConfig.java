@@ -19,6 +19,10 @@ public class RabbitMQConfig {
     public static final String GUIAS_DLQ = "guias.dlq";
     public static final String GUIAS_DLQ_ROUTING_KEY = "guias.dlq.routing-key";
 
+    public static final String GUIAS_ESTADO_EXCHANGE = "guias.estado.exchange";
+    public static final String GUIAS_ESTADO_QUEUE = "guias.estado.queue";
+    public static final String GUIAS_ESTADO_ROUTING_KEY = "guias.estado.routing-key";
+
     @Bean
     public DirectExchange guiasExchange() {
         return new DirectExchange(GUIAS_EXCHANGE, true, false);
@@ -54,5 +58,24 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(guiasDlq)
                 .to(guiasDlx)
                 .with(GUIAS_DLQ_ROUTING_KEY);
+    }
+
+    @Bean
+    public DirectExchange guiasEstadoExchange() {
+        return new DirectExchange(GUIAS_ESTADO_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Queue guiasEstadoQueue() {
+        return QueueBuilder.durable(GUIAS_ESTADO_QUEUE).build();
+    }
+
+    @Bean
+    public Binding guiasEstadoBinding(
+            Queue guiasEstadoQueue,
+            DirectExchange guiasEstadoExchange) {
+        return BindingBuilder.bind(guiasEstadoQueue)
+                .to(guiasEstadoExchange)
+                .with(GUIAS_ESTADO_ROUTING_KEY);
     }
 }

@@ -22,6 +22,9 @@ class RabbitMQConfigTest {
         Queue dlq = config.guiasDlq();
         Binding queueBinding = config.guiasBinding(queue, exchange);
         Binding dlqBinding = config.guiasDlqBinding(dlq, dlx);
+        DirectExchange estadoExchange = config.guiasEstadoExchange();
+        Queue estadoQueue = config.guiasEstadoQueue();
+        Binding estadoBinding = config.guiasEstadoBinding(estadoQueue, estadoExchange);
 
         assertEquals(RabbitMQConfig.GUIAS_EXCHANGE, exchange.getName());
         assertTrue(exchange.isDurable());
@@ -54,5 +57,13 @@ class RabbitMQConfigTest {
         assertEquals(RabbitMQConfig.GUIAS_DLX, dlqBinding.getExchange());
         assertEquals(RabbitMQConfig.GUIAS_DLQ, dlqBinding.getDestination());
         assertEquals(RabbitMQConfig.GUIAS_DLQ_ROUTING_KEY, dlqBinding.getRoutingKey());
+
+        assertEquals(RabbitMQConfig.GUIAS_ESTADO_EXCHANGE, estadoExchange.getName());
+        assertTrue(estadoExchange.isDurable());
+        assertEquals(RabbitMQConfig.GUIAS_ESTADO_QUEUE, estadoQueue.getName());
+        assertTrue(estadoQueue.isDurable());
+        assertEquals(RabbitMQConfig.GUIAS_ESTADO_EXCHANGE, estadoBinding.getExchange());
+        assertEquals(RabbitMQConfig.GUIAS_ESTADO_QUEUE, estadoBinding.getDestination());
+        assertEquals(RabbitMQConfig.GUIAS_ESTADO_ROUTING_KEY, estadoBinding.getRoutingKey());
     }
 }
