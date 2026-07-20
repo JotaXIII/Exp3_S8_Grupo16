@@ -103,6 +103,12 @@ public class GuiaProcesadaServiceImpl implements GuiaProcesadaService {
             guia.setEstado(EstadoProcesamiento.PROCESADA);
 
             GuiaProcesada actualizada = repository.save(guia);
+            estadoPublisher.publicarActualizacion(
+                    actualizada.getMensajeId(),
+                    actualizada.getNumeroGuia(),
+                    actualizada.getTransportista(),
+                    actualizada.getCliente(),
+                    actualizada.getDireccionDestino());
             LOGGER.info(
                     "Guia procesada actualizada: mensajeId={}, numeroGuia={}",
                     guia.getMensajeId(),

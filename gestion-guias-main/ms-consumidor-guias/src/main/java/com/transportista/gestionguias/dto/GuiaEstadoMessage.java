@@ -9,6 +9,9 @@ public class GuiaEstadoMessage {
     private String numeroGuia;
     private String estado;
     private LocalDateTime fechaActualizacion;
+    private String transportista;
+    private String cliente;
+    private String direccionDestino;
 
     public GuiaEstadoMessage() {
     }
@@ -22,6 +25,20 @@ public class GuiaEstadoMessage {
         this.numeroGuia = numeroGuia;
         this.estado = estado;
         this.fechaActualizacion = fechaActualizacion;
+    }
+
+    public GuiaEstadoMessage(
+            UUID mensajeId,
+            String numeroGuia,
+            String estado,
+            LocalDateTime fechaActualizacion,
+            String transportista,
+            String cliente,
+            String direccionDestino) {
+        this(mensajeId, numeroGuia, estado, fechaActualizacion);
+        this.transportista = transportista;
+        this.cliente = cliente;
+        this.direccionDestino = direccionDestino;
     }
 
     public UUID getMensajeId() {
@@ -54,5 +71,29 @@ public class GuiaEstadoMessage {
 
     public void setFechaActualizacion(LocalDateTime fechaActualizacion) {
         this.fechaActualizacion = fechaActualizacion;
+    }
+
+    public String getTransportista() {
+        return transportista;
+    }
+
+    public void setTransportista(String transportista) {
+        this.transportista = transportista;
+    }
+
+    public String getCliente() {
+        return cliente;
+    }
+
+    public void setCliente(String cliente) {
+        this.cliente = cliente;
+    }
+
+    public String getDireccionDestino() {
+        return direccionDestino;
+    }
+
+    public void setDireccionDestino(String direccionDestino) {
+        this.direccionDestino = direccionDestino;
     }
 }

@@ -129,6 +129,12 @@ class GuiaProcesadaServiceImplTest {
         assertEquals(request.getTransportista(), mensajeCaptor.getValue().getTransportista());
         assertEquals(request.getCliente(), response.getCliente());
         assertEquals(EstadoProcesamiento.PROCESADA, response.getEstado());
+        verify(estadoPublisher).publicarActualizacion(
+                guia.getMensajeId(),
+                guia.getNumeroGuia(),
+                request.getTransportista(),
+                request.getCliente(),
+                request.getDireccionDestino());
     }
 
     @Test

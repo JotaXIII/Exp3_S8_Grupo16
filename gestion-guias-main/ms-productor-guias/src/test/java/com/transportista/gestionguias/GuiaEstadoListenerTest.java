@@ -66,6 +66,32 @@ class GuiaEstadoListenerTest {
     }
 
     @Test
+    void sincronizaDatosActualizadosDeLaGuia() {
+        UUID mensajeId = UUID.randomUUID();
+        GuiaDespacho guia = new GuiaDespacho();
+        guia.setMensajeId(mensajeId);
+        guia.setEstado("PROCESADA");
+        guia.setTransportista("Transportista Uno");
+        guia.setCliente("Cliente Uno");
+        guia.setDireccionDestino("Destino Uno");
+        when(repository.findByMensajeId(mensajeId)).thenReturn(Optional.of(guia));
+
+        listener.actualizarEstado(new GuiaEstadoMessage(
+                mensajeId,
+                "GUIA-123",
+                "PROCESADA",
+                LocalDateTime.now(),
+                "Transportista Dos",
+                "Cliente Dos",
+                "Destino Dos"));
+
+        assertEquals("Transportista Dos", guia.getTransportista());
+        assertEquals("Cliente Dos", guia.getCliente());
+        assertEquals("Destino Dos", guia.getDireccionDestino());
+        verify(repository).save(guia);
+    }
+
+    @Test
     void rechazaEstadoDesconocido() {
         GuiaEstadoMessage mensaje = new GuiaEstadoMessage(
                 UUID.randomUUID(),

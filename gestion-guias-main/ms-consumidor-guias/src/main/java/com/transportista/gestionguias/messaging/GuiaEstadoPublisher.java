@@ -31,4 +31,24 @@ public class GuiaEstadoPublisher {
                 RabbitMQConfig.GUIAS_ESTADO_ROUTING_KEY,
                 mensaje);
     }
+
+    public void publicarActualizacion(
+            UUID mensajeId,
+            String numeroGuia,
+            String transportista,
+            String cliente,
+            String direccionDestino) {
+        GuiaEstadoMessage mensaje = new GuiaEstadoMessage(
+                mensajeId,
+                numeroGuia,
+                "PROCESADA",
+                LocalDateTime.now(),
+                transportista,
+                cliente,
+                direccionDestino);
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.GUIAS_ESTADO_EXCHANGE,
+                RabbitMQConfig.GUIAS_ESTADO_ROUTING_KEY,
+                mensaje);
+    }
 }

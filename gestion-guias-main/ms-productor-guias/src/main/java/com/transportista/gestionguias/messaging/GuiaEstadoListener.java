@@ -45,6 +45,15 @@ public class GuiaEstadoListener {
         }
 
         guia.setEstado(mensaje.getEstado());
+        if (mensaje.getTransportista() != null) {
+            guia.setTransportista(mensaje.getTransportista());
+        }
+        if (mensaje.getCliente() != null) {
+            guia.setCliente(mensaje.getCliente());
+        }
+        if (mensaje.getDireccionDestino() != null) {
+            guia.setDireccionDestino(mensaje.getDireccionDestino());
+        }
         repository.save(guia);
         LOGGER.info(
                 "Estado de solicitud actualizado: mensajeId={}, numeroGuia={}, estado={}",
